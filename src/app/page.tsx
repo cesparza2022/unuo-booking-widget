@@ -212,11 +212,18 @@ export default function Page() {
             <option value="">
               {selectedProduct ? "Elige unidad…" : "Selecciona un servicio primero"}
             </option>
-            {variants.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.unit_type} — {money(v.price_cents, v.currency)} — {v.duration_minutes} min
-              </option>
-            ))}
+            {/* Variantes ordenadas por capacidad numérica (PAX más pequeño primero) */}
+            {[...variants]
+              .sort((a, b) => {
+                const paxA = parseInt(a.unit_type.replace("PAX_", "")) || 0;
+                const paxB = parseInt(b.unit_type.replace("PAX_", "")) || 0;
+                return paxA - paxB;
+              })
+              .map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.unit_type} — {money(v.price_cents, v.currency)} — {v.duration_minutes} min
+                </option>
+              ))}
           </select>
 
           {selectedVariant ? (
@@ -237,14 +244,36 @@ export default function Page() {
           <h2 className="text-base font-semibold">3) Fecha(s)</h2>
 
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_160px]">
-            <input type="date" value={date1} onChange={(e) => setDate1(e.target.value)} className="rounded-xl border border-zinc-200 p-3 text-sm" />
-            <input type="time" value={time1} onChange={(e) => setTime1(e.target.value)} className="rounded-xl border border-zinc-200 p-3 text-sm" />
+            <input
+              type="date"
+              value={date1}
+              onChange={(e) => setDate1(e.target.value)}
+              className="rounded-xl border border-zinc-200 p-3 text-sm"
+            />
+            <input
+              type="time"
+              value={time1}
+              onChange={(e) => setTime1(e.target.value)}
+              className="rounded-xl border border-zinc-200 p-3 text-sm"
+              step="60" // Permite seleccionar minutos; cambia a "3600" para horas exactas
+            />
           </div>
 
           {needsTwoDates ? (
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_160px]">
-              <input type="date" value={date2} onChange={(e) => setDate2(e.target.value)} className="rounded-xl border border-zinc-200 p-3 text-sm" />
-              <input type="time" value={time2} onChange={(e) => setTime2(e.target.value)} className="rounded-xl border border-zinc-200 p-3 text-sm" />
+              <input
+                type="date"
+                value={date2}
+                onChange={(e) => setDate2(e.target.value)}
+                className="rounded-xl border border-zinc-200 p-3 text-sm"
+              />
+              <input
+                type="time"
+                value={time2}
+                onChange={(e) => setTime2(e.target.value)}
+                className="rounded-xl border border-zinc-200 p-3 text-sm"
+                step="60"
+              />
             </div>
           ) : null}
 
@@ -272,28 +301,28 @@ export default function Page() {
           <h2 className="text-base font-semibold">4) Datos del cliente</h2>
 
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <input 
-              placeholder="Nombre" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              className="rounded-xl border border-zinc-200 p-3 text-sm" 
-              suppressHydrationWarning 
+            <input
+              placeholder="Nombre"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="rounded-xl border border-zinc-200 p-3 text-sm"
+              suppressHydrationWarning
             />
-            <input 
-              placeholder="Teléfono" 
-              value={phone} 
-              onChange={(e) => setPhone(e.target.value)} 
-              className="rounded-xl border border-zinc-200 p-3 text-sm" 
-              suppressHydrationWarning 
+            <input
+              placeholder="Teléfono"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="rounded-xl border border-zinc-200 p-3 text-sm"
+              suppressHydrationWarning
             />
           </div>
 
-          <input 
-            placeholder="Email" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
-            className="mt-2 w-full rounded-xl border border-zinc-200 p-3 text-sm" 
-            suppressHydrationWarning 
+          <input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-2 w-full rounded-xl border border-zinc-200 p-3 text-sm"
+            suppressHydrationWarning
           />
 
           <button
@@ -310,9 +339,15 @@ export default function Page() {
               <div className="mt-1">
                 <span className="font-semibold">booking_id:</span> {holdResult.booking_id}
               </div>
-              <div><span className="font-semibold">Total:</span> {money(holdResult.total_cents, holdResult.currency)}</div>
-              <div><span className="font-semibold">Anticipo (30%):</span> {money(holdResult.deposit_cents, holdResult.currency)}</div>
-              <div><span className="font-semibold">Restante:</span> {money(holdResult.remaining_cents, holdResult.currency)}</div>
+              <div>
+                <span className="font-semibold">Total:</span> {money(holdResult.total_cents, holdResult.currency)}
+              </div>
+              <div>
+                <span className="font-semibold">Anticipo (30%):</span> {money(holdResult.deposit_cents, holdResult.currency)}
+              </div>
+              <div>
+                <span className="font-semibold">Restante:</span> {money(holdResult.remaining_cents, holdResult.currency)}
+              </div>
             </div>
           ) : null}
         </section>
