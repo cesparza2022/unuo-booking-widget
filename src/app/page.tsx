@@ -46,6 +46,21 @@ export default function Page() {
   const [date2, setDate2] = useState("");
   const [time2, setTime2] = useState("10:00");
 
+  // --- Nuevos campos de ubicación según tipo de servicio ---
+  // Para bodas (servicio-basico y boda-torna-boda)
+  const [hotelPickup, setHotelPickup] = useState("");
+  const [church, setChurch] = useState("");
+  const [event, setEvent] = useState("");
+  const [hotelDropoff, setHotelDropoff] = useState("");
+
+  // Para servicios simples (traslados sencillos)
+  const [pickupAddress, setPickupAddress] = useState("");
+  const [dropoffAddress, setDropoffAddress] = useState("");
+
+  // Para servicio a disposición
+  const [itineraryNotes, setItineraryNotes] = useState("");
+
+  // --- Datos del cliente ---
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -76,7 +91,30 @@ export default function Page() {
   const variants = selectedProduct?.variants ?? [];
   const selectedVariant = useMemo(() => variants.find((v) => v.id === variantId), [variants, variantId]);
 
+  // Determinar si el servicio requiere dos fechas (solo para boda-torna-boda)
   const needsTwoDates = useMemo(() => productSlug === "boda-torna-boda", [productSlug]);
+
+  // --- Determinar el tipo de ruta según el slug del producto ---
+  const routeType = useMemo(() => {
+    if (!selectedProduct) return null;
+    if (productSlug === "servicio-basico" || productSlug === "boda-torna-boda") return "wedding";
+    if (productSlug === "a-disposicion") return "disposicion";
+    return "simple"; // valor por defecto para otros servicios (traslados sencillos)
+  }, [productSlug, selectedProduct]);
+
+  // Validar que los campos obligatorios estén llenos según el tipo de ruta
+  const addressesValid = useMemo(() => {
+    if (!routeType) return false;
+    switch (routeType) {
+      case "wedding":
+        return Boolean(hotelPickup.trim() && church.trim() && event.trim() && hotelDropoff.trim());
+      case "disposicion":
+        return Boolean(itineraryNotes.trim());
+      case "simple":
+      default:
+        return Boolean(pickupAddress.trim() && dropoffAddress.trim());
+    }
+  }, [routeType, hotelPickup, church, event, hotelDropoff, itineraryNotes, pickupAddress, dropoffAddress]);
 
   const canCheck =
     Boolean(variantId) &&
@@ -86,6 +124,7 @@ export default function Page() {
 
   const canCreate =
     canCheck &&
+    addressesValid &&
     avail?.ok &&
     avail.available &&
     Boolean(name.trim()) &&
@@ -121,6 +160,25 @@ export default function Page() {
       const blocks = [{ start_at: toIsoLocal(date1, time1) }];
       if (needsTwoDates) blocks.push({ start_at: toIsoLocal(date2, time2) });
 
+      // Construir el objeto itinerary con las direcciones según el tipo
+      let itinerary: any = { source: "widget", product_slug: productSlug };
+      if (routeType === "wedding") {
+        itinerary.addresses = {
+          hotelPickup,
+          church,
+          event,
+          hotelDropoff,
+        };
+      } else if (routeType === "disposicion") {
+        itinerary.notes = itineraryNotes;
+      } else {
+        // simple
+        itinerary.addresses = {
+          pickup: pickupAddress,
+          dropoff: dropoffAddress,
+        };
+      }
+
       const res = await fetch(`${BASE}/create_hold`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,7 +186,7 @@ export default function Page() {
           variant_id: variantId,
           customer: { name, email, phone },
           blocks,
-          itinerary: { source: "widget", product_slug: productSlug },
+          itinerary, // ahora incluye las direcciones
         }),
       });
       const json = await res.json();
@@ -145,7 +203,7 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-zinc-50 p-6 text-zinc-900">
       <div className="mx-auto w-full max-w-3xl">
-        <h1 className="text-2xl font-bold">UNUO — Booking (Bodas)</h1>
+        <h1 className="text-2xl font-bold">UNUO — Booking </h1>
         <p className="mt-1 text-sm text-zinc-600">
           Selecciona servicio, unidad y fecha(s). Luego genera tu reserva (hold) con anticipo 30%.
         </p>
@@ -156,9 +214,9 @@ export default function Page() {
           </div>
         ) : null}
 
+        {/* Sección 1: Servicio */}
         <section className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
           <h2 className="text-base font-semibold">1) Servicio</h2>
-
           {loadingCatalog ? (
             <div className="mt-2 text-sm text-zinc-600">Cargando catálogo…</div>
           ) : (
@@ -169,6 +227,14 @@ export default function Page() {
                 setVariantId("");
                 setAvail(null);
                 setHoldResult(null);
+                // Reiniciar direcciones al cambiar servicio
+                setHotelPickup("");
+                setChurch("");
+                setEvent("");
+                setHotelDropoff("");
+                setPickupAddress("");
+                setDropoffAddress("");
+                setItineraryNotes("");
               }}
               className="mt-2 w-full rounded-xl border border-zinc-200 p-3 text-sm"
             >
@@ -180,7 +246,6 @@ export default function Page() {
               ))}
             </select>
           )}
-
           {selectedProduct ? (
             <div className="mt-3 text-sm text-zinc-600">
               <div>
@@ -196,9 +261,9 @@ export default function Page() {
           ) : null}
         </section>
 
+        {/* Sección 2: Unidad */}
         <section className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4">
           <h2 className="text-base font-semibold">2) Unidad</h2>
-
           <select
             value={variantId}
             disabled={!selectedProduct}
@@ -212,7 +277,6 @@ export default function Page() {
             <option value="">
               {selectedProduct ? "Elige unidad…" : "Selecciona un servicio primero"}
             </option>
-            {/* Variantes ordenadas por capacidad numérica (PAX más pequeño primero) */}
             {[...variants]
               .sort((a, b) => {
                 const paxA = parseInt(a.unit_type.replace("PAX_", "")) || 0;
@@ -225,7 +289,6 @@ export default function Page() {
                 </option>
               ))}
           </select>
-
           {selectedVariant ? (
             <div className="mt-3 text-sm text-zinc-700">
               <div>
@@ -240,9 +303,9 @@ export default function Page() {
           ) : null}
         </section>
 
+        {/* Sección 3: Fecha(s) */}
         <section className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4">
           <h2 className="text-base font-semibold">3) Fecha(s)</h2>
-
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_160px]">
             <input
               type="date"
@@ -255,10 +318,9 @@ export default function Page() {
               value={time1}
               onChange={(e) => setTime1(e.target.value)}
               className="rounded-xl border border-zinc-200 p-3 text-sm"
-              step="60" // Permite seleccionar minutos; cambia a "3600" para horas exactas
+              step="60"
             />
           </div>
-
           {needsTwoDates ? (
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_160px]">
               <input
@@ -276,7 +338,6 @@ export default function Page() {
               />
             </div>
           ) : null}
-
           <button
             onClick={checkAvailability}
             disabled={!canCheck || checking}
@@ -284,7 +345,6 @@ export default function Page() {
           >
             {checking ? "Revisando…" : "Ver disponibilidad"}
           </button>
-
           {avail ? (
             <div className="mt-3 text-sm">
               <span className="font-semibold">Disponibilidad:</span>{" "}
@@ -297,9 +357,74 @@ export default function Page() {
           ) : null}
         </section>
 
-        <section className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4">
-          <h2 className="text-base font-semibold">4) Datos del cliente</h2>
+        {/* Sección 4: Direcciones (según tipo de servicio) */}
+        {selectedProduct && routeType && (
+          <section className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4">
+            <h2 className="text-base font-semibold">
+              {routeType === "wedding" ? "4) Direcciones (boda)" : routeType === "disposicion" ? "4) Itinerario deseado" : "4) Direcciones de recogida y destino"}
+            </h2>
 
+            {routeType === "wedding" && (
+              <div className="mt-2 space-y-2">
+                <input
+                  placeholder="Hotel (recogida)"
+                  value={hotelPickup}
+                  onChange={(e) => setHotelPickup(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                />
+                <input
+                  placeholder="Iglesia"
+                  value={church}
+                  onChange={(e) => setChurch(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                />
+                <input
+                  placeholder="Salón de eventos"
+                  value={event}
+                  onChange={(e) => setEvent(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                />
+                <input
+                  placeholder="Hotel (regreso)"
+                  value={hotelDropoff}
+                  onChange={(e) => setHotelDropoff(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                />
+              </div>
+            )}
+
+            {routeType === "disposicion" && (
+              <textarea
+                placeholder="Describe el itinerario deseado (por ejemplo: recogida en hotel X, luego visita a bodegas, comida en Y, regreso a hotel Z)"
+                value={itineraryNotes}
+                onChange={(e) => setItineraryNotes(e.target.value)}
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-zinc-200 p-3 text-sm"
+              />
+            )}
+
+            {routeType === "simple" && (
+              <div className="mt-2 space-y-2">
+                <input
+                  placeholder="Dirección de recogida"
+                  value={pickupAddress}
+                  onChange={(e) => setPickupAddress(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                />
+                <input
+                  placeholder="Dirección de destino"
+                  value={dropoffAddress}
+                  onChange={(e) => setDropoffAddress(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                />
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Sección 5: Datos del cliente */}
+        <section className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4">
+          <h2 className="text-base font-semibold">5) Datos del cliente</h2>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input
               placeholder="Nombre"
@@ -316,7 +441,6 @@ export default function Page() {
               suppressHydrationWarning
             />
           </div>
-
           <input
             placeholder="Email"
             value={email}
